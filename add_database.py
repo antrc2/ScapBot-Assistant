@@ -6,7 +6,8 @@ from openai import OpenAI
 import pandas as pd
 import uuid  # Để tạo id duy nhất
 import os
-
+from dotenv import load_dotenv
+load_dotenv()
 base_url = os.getenv("BASE_URL")
 api_key = os.getenv("API_KEY")
 chat_model = os.getenv("CHAT_MODEL")

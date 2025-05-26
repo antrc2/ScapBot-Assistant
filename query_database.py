@@ -2,14 +2,16 @@ from qdrant_client import QdrantClient
 from openai import OpenAI
 import json
 import os
+from dotenv import load_dotenv
+load_dotenv()
 qdrant = QdrantClient(path="database")
 collection_name = "my_collection"
 base_url = os.getenv("BASE_URL")
-api_key = os.getenv("API_KEY")
+apiKey = os.getenv("API_KEY")
 chat_model = os.getenv("CHAT_MODEL")
 embedding_model = os.getenv("EMBEDDING_MODEL")
 
-client = OpenAI(base_url=base_url, api_key=api_key)
+client = OpenAI(base_url=base_url, api_key=apiKey)
 
 def embed(text):
     return client.embeddings.create(
@@ -34,7 +36,7 @@ tools = [{
     "type": "function",
     "function": {
         "name": "search_in_qdrant_database",
-        "description": "Tìm kiếm thêm thông tin ở trong Qdrant",
+        "description": "Tìm kiếm thêm thông tin ở trong Qdrant mỗi khi trả lời",
         "parameters": {
             "type": "object",
             "properties": {
@@ -51,7 +53,7 @@ tools = [{
 messages = [
     {
         "role": "user",
-        "content": "Giới thiệu chi tiết về dịch vụ của ScapBot"
+        "content": "VueJS là gì"
     }
 ]
 
