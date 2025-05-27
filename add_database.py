@@ -2,6 +2,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, VectorParams, Distance
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+from qdrant_client.http import models
 from openai import OpenAI
 import pandas as pd
 import uuid  # Để tạo id duy nhất
@@ -24,7 +25,11 @@ collection_name = "my_collection"
 if collection_name not in [c.name for c in qdrant.get_collections().collections]:
     qdrant.create_collection(
         collection_name=collection_name,
-        vectors_config=VectorParams(size=768, distance=Distance.COSINE)  # Size tùy theo model bạn dùng
+        vectors_config=VectorParams(size=768, distance=Distance.COSINE),  # Size tùy theo model bạn dùng
+        hnsw_config=models.HnswConfigDiff(
+        m=16,           # số liên kết giữa các điểm (cao hơn tăng độ chính xác)
+        ef_construct=200  # độ sâu tìm kiếm khi xây chỉ mục
+    )
     )
     print(f"✅ Đã tạo collection `{collection_name}`")
 

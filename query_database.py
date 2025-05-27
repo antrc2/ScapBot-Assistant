@@ -1,37 +1,39 @@
 from qdrant_client import QdrantClient
+from qdrant_client.models import SearchParams
 from openai import OpenAI
 import json
 import os
 from dotenv import load_dotenv
+
+# Load environment variables
 load_dotenv()
-qdrant = QdrantClient(path="database")
-collection_name = "my_collection"
 base_url = os.getenv("BASE_URL")
-apiKey = os.getenv("API_KEY")
+api_key = os.getenv("API_KEY")
 chat_model = os.getenv("CHAT_MODEL")
 embedding_model = os.getenv("EMBEDDING_MODEL")
 
-client = OpenAI(base_url=base_url, api_key=apiKey)
+# Initialize clients
+qdrant = QdrantClient(path="database")
+collection_name = "my_collection"
+client = OpenAI(base_url=base_url, api_key=api_key)
 
+# Embed text into vector
 def embed(text):
     return client.embeddings.create(
         model=embedding_model,
         input=text
     ).data[0].embedding
+
+# Search Qdrant vector DB
 def search_in_qdrant_database(query):
     query_vector = embed(query)
     results = qdrant.search(
         collection_name=collection_name,
         query_vector=query_vector,
-        limit=5
+        limit=10,
+        search_params=SearchParams(hnsw_ef=1024, exact=True)
     )
-    result = ''
-    for res in results:
-        result += res.payload['text']
-    return result
-
-import json
-
+    return ''.join(res.payload['text'] for res in results)
 tools = [{
     "type": "function",
     "function": {
@@ -44,64 +46,61 @@ tools = [{
                     "type": "string",
                     "description": "Từ khóa để tìm kiếm. Bắt buộc phải là tiếng Việt"
                 },
+                "limit": {
+                    "type": "integer",
+                    "description": "Số lượng muốn tìm kiếm (5-20)"
+                }
             },
             "required": ["query"]
         }
     }
 }]
+def chat_with_gemini(messages):
+    response = client.chat.completions.create(
+        model=chat_model,
+        messages=messages,
+        tools=tools,
+        tool_choice="required",
+        max_tokens=1024
+    )
 
-messages = [
-    {
-        "role": "user",
-        "content": "VueJS là gì"
-    }
-]
+    # Step 2: Check if AI used a tool
+    tool_calls = response.choices[0].message.tool_calls
+    if tool_calls:
+        tool_call = tool_calls[0]
+        arguments = json.loads(tool_call.function.arguments)
 
-# Bước 1: gửi initial prompt
-response = client.chat.completions.create(
-    model=chat_model,
-    messages=messages,
-    tools=tools,
-    tool_choice="required",
-    max_tokens=512,
-)
+        # Step 3: Execute the tool
+        result = search_in_qdrant_database(arguments['query'])
 
-# Bước 2: lấy tool_call từ assistant
-tool_call = response.choices[0].message.tool_calls[0]
-arguments = json.loads(tool_call.function.arguments)
-# print(arguments['query'])
-# print(type(arguments))
-# Bước 3: thực thi function
-result = search_in_qdrant_database(arguments['query'])
+        # Step 4: Append tool call to messages
+        messages.append({
+            "role": "assistant",
+            "tool_calls": [{
+                "id": tool_call.id,
+                "type": "function",
+                "function": {
+                    "name": tool_call.function.name,
+                    "arguments": tool_call.function.arguments
+                }
+            }]
+        })
 
-# Bước 4: Append assistant function call
-messages.append({
-    "role": "assistant",
-    "tool_calls": [
-        {
-            "id": tool_call.id,
-            "type": "function",
-            "function": {
-                "name": tool_call.function.name,
-                "arguments": tool_call.function.arguments
-            }
-        }
-    ]
-})
+        # Step 5: Append tool result to messages
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call.id,
+            "content": json.dumps(result, ensure_ascii=False)
+        })
 
-# Bước 5: Append kết quả trả về từ tool
-messages.append({
-    "role": "tool",
-    "tool_call_id": tool_call.id,
-    "content": json.dumps(result, ensure_ascii=False)  # nếu result là dict/list
-})
+        # Step 6: Send final message with full context
+        final_response = client.chat.completions.create(
+            model=chat_model,
+            messages=messages,
+            max_tokens=2048
+        )
+        return (final_response.choices[0].message.content)
 
-# Bước 6: Gửi lại đầy đủ để AI phản hồi
-final_response = client.chat.completions.create(
-    model="gemini-2.0-flash",
-    messages=messages,
-    max_tokens=1024,
-)
-
-# In kết quả trả lời cuối cùng
-print(final_response.choices[0].message.content)
+    else:
+        # If no tool used, just return the AI response directly
+        return (response.choices[0].message.content)
