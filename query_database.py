@@ -23,7 +23,7 @@ def embed(text):
         model=embedding_model,
         contents=text,
         config=types.EmbedContentConfig(
-          task_type="retrieval_query",
+          task_type="RETRIEVAL_QUERY",
         )
     )
     return embedding.embeddings[0].values

@@ -56,7 +56,7 @@ def embeddingText(text):
         model=embedding_model,
         contents=text,
         config=types.EmbedContentConfig(
-          task_type="retrieval_document",
+          task_type="RETRIEVAL_DOCUMENT",
         )
     )
     return embedding.embeddings[0].values
