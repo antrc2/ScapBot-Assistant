@@ -4,7 +4,7 @@ from openai import OpenAI
 import json
 import os
 from dotenv import load_dotenv
-
+from google.genai import Client, types
 # Load environment variables
 load_dotenv()
 base_url = os.getenv("BASE_URL")
@@ -16,13 +16,17 @@ embedding_model = os.getenv("EMBEDDING_MODEL")
 qdrant = QdrantClient(path="database")
 collection_name = "my_collection"
 client = OpenAI(base_url=base_url, api_key=api_key)
-
+clients = Client(api_key=api_key)
 # Embed text into vector
 def embed(text):
-    return client.embeddings.create(
+    embedding = clients.models.embed_content(
         model=embedding_model,
-        input=text
-    ).data[0].embedding
+        contents=text,
+        config=types.EmbedContentConfig(
+          task_type="retrieval_query",
+        )
+    )
+    return embedding.embeddings[0].values
 
 # Search Qdrant vector DB
 def search_in_qdrant_database(query):
@@ -30,8 +34,8 @@ def search_in_qdrant_database(query):
     results = qdrant.search(
         collection_name=collection_name,
         query_vector=query_vector,
-        limit=10,
-        search_params=SearchParams(hnsw_ef=1024, exact=True)
+        limit=15,
+        search_params=SearchParams(hnsw_ef=2048, exact=True)
     )
     return ''.join(res.payload['text'] for res in results)
 tools = [{
